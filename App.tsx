@@ -1,118 +1,138 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { RootStackParamList } from './src/types/navigation';
+import { WelcomeScreen } from './src/screens/WelcomeScreen';
+import { SignInScreen } from './src/screens/SignInScreen';
+import { SignUpScreen } from './src/screens/SignUpScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { OnboardingScreen } from './src/screens/onboarding/OnboardingScreen';
+import { PreSignUpOnboardingScreen } from './src/screens/onboarding/PreSignUpOnboardingScreen';
+import { TabNavigator } from './src/navigation/TabNavigator';
+import { TrackMatchScreen } from './src/screens/TrackMatchScreen';
+import { MatchResultScreen } from './src/screens/MatchResultScreen';
+import { MatchDetailScreen } from './src/screens/MatchDetailScreen';
+import { EditProfileScreen } from './src/screens/EditProfileScreen';
+import { ActivityIndicator, View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { colors } from './src/theme';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+function AppNavigator() {
+  const { user, loading } = useAuth();
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  const hasCompletedOnboarding = user?.onboarding_completed === true;
+
+  console.log('[APP NAVIGATOR] ===== NAVIGATION DECISION =====');
+  console.log('[APP NAVIGATOR] User exists:', !!user);
+  console.log('[APP NAVIGATOR] User ID:', user?.id);
+  console.log('[APP NAVIGATOR] User email:', user?.email);
+  console.log('[APP NAVIGATOR] onboarding_completed:', user?.onboarding_completed);
+  console.log('[APP NAVIGATOR] hasCompletedOnboarding:', hasCompletedOnboarding);
+  console.log('[APP NAVIGATOR] Will show:', !user ? 'AUTH STACK' : !hasCompletedOnboarding ? 'ONBOARDING STACK' : 'MAIN APP STACK');
+
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+        }}
+      >
+        {!user ? (
+          // Auth Stack
+          <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="PreSignUpOnboarding" component={PreSignUpOnboardingScreen} />
+            <Stack.Screen name="SignIn" component={SignInScreen} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} />
+          </>
+        ) : !hasCompletedOnboarding ? (
+          // Onboarding Stack
+          <>
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          </>
+        ) : (
+          // Main App Stack
+          <>
+            <Stack.Screen name="Main" component={TabNavigator} />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{
+                headerShown: true,
+                title: 'Settings',
+                headerStyle: {
+                  backgroundColor: colors.white,
+                },
+                headerTitleStyle: {
+                  fontSize: 18,
+                  fontWeight: '600',
+                },
+              }}
+            />
+            <Stack.Screen name="TrackMatch" component={TrackMatchScreen} />
+            <Stack.Screen name="MatchResult" component={MatchResultScreen} />
+            <Stack.Screen 
+              name="MatchDetail" 
+              component={MatchDetailScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="EditProfile"
+              component={EditProfileScreen}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Edit Profile',
+                headerStyle: {
+                  backgroundColor: colors.white,
+                },
+                headerTitleStyle: {
+                  fontSize: 18,
+                  fontWeight: '600',
+                },
+                headerLeft: () => (
+                  <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={{ marginLeft: 16 }}
+                  >
+                    <Icon name="arrow-left" size={24} color={colors.secondary} />
+                  </TouchableOpacity>
+                ),
+              })}
+            />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
+export default function App() {
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <AuthProvider>
+      <AppNavigator />
+    </AuthProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.white,
   },
 });
-
-export default App;
