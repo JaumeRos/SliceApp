@@ -1,26 +1,51 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, TextInput as RNTextInput, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, TextInput as RNTextInput, Alert, Modal, Keyboard } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
-import { H2, H3, P1, P2, Button, IconButton } from '../components';
+import { H2, H3, P1, P2, Button } from '../components';
 import { colors, spacing } from '../theme';
 import { api } from '../services/api';
 
+const sports = [
+  { id: 'tennis', name: 'Tennis', icon: 'tennis' },
+  { id: 'padel', name: 'Padel', icon: 'tennis-ball' },
+  { id: 'badminton', name: 'Badminton', icon: 'badminton' },
+  { id: 'table-tennis', name: 'Ping Pong', icon: 'table-tennis' },
+];
+
+const courtTypes = ['Clay', 'Hard', 'Grass', 'Carpet'];
+const matchTypes = ['Match', 'Practice', 'Tournament'];
+
 export const TrackMatchScreen = () => {
   const navigation = useNavigation();
+  const [selectedSport, setSelectedSport] = useState('tennis');
   const [opponentName, setOpponentName] = useState('');
-  const [playerRanking, setPlayerRanking] = useState('7.2');
-  const [matchType, setMatchType] = useState<'singles' | 'doubles'>('singles');
+  const [opponentRanking, setOpponentRanking] = useState('');
+  const [playerRanking] = useState('7.2');
+  const [matchType] = useState<'singles' | 'doubles'>('singles');
   const [sets, setSets] = useState([
     { player: '', opponent: '' },
     { player: '', opponent: '' },
     { player: '', opponent: '' },
   ]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [duration, setDuration] = useState('');
+  const [durationHours, setDurationHours] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState('');
   const [courtType, setCourtType] = useState('Clay');
   const [location, setLocation] = useState('');
+  const [selectedMatchType, setSelectedMatchType] = useState('Match');
   const [matchTitle, setMatchTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Modal states
+  const [sportModalVisible, setSportModalVisible] = useState(false);
+  const [dateModalVisible, setDateModalVisible] = useState(false);
+  const [durationModalVisible, setDurationModalVisible] = useState(false);
+  const [courtTypeModalVisible, setCourtTypeModalVisible] = useState(false);
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [matchTypeModalVisible, setMatchTypeModalVisible] = useState(false);
 
   const handleSetScore = (setIndex: number, type: 'player' | 'opponent', value: string) => {
     const newSets = [...sets];
@@ -33,14 +58,18 @@ export const TrackMatchScreen = () => {
     let opponentSets = 0;
 
     sets.forEach(set => {
-      const playerScore = parseInt(set.player) || 0;
-      const opponentScore = parseInt(set.opponent) || 0;
-      
-      if (playerScore > opponentScore) playerSets++;
-      if (opponentScore > playerScore) opponentSets++;
+      const playerScore = parseInt(set.player, 10) || 0;
+      const opponentScore = parseInt(set.opponent, 10) || 0;
+
+      if (playerScore > opponentScore) {
+        playerSets++;
+      }
+      if (opponentScore > playerScore) {
+        opponentSets++;
+      }
     });
 
-    return { playerSets, opponentSets, result: playerSets > opponentSets ? 'win' : 'loss' };
+    return { playerSets, opponentSets, result: (playerSets > opponentSets ? 'win' : 'loss') as 'win' | 'loss' };
   };
 
   const handleSubmit = async () => {
@@ -58,7 +87,7 @@ export const TrackMatchScreen = () => {
         sets: sets.filter(set => set.player && set.opponent),
         location: location || undefined,
         notes: notes || undefined,
-        playedAt: new Date().toISOString(),
+        playedAt: selectedDate.toISOString(),
       };
 
       console.log('Submitting match:', matchData);
@@ -86,70 +115,122 @@ export const TrackMatchScreen = () => {
     }
   };
 
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  };
+
+  const formatDuration = (hours: string, minutes: string) => {
+    if (!hours && !minutes) return '';
+    const h = parseInt(hours, 10) || 0;
+    const m = parseInt(minutes, 10) || 0;
+    if (h === 0 && m === 0) return '';
+    if (h === 0) return `${m}min`;
+    if (m === 0) return `${h}hr`;
+    return `${h}hr ${m}min`;
+  };
+
   const isValid = opponentName && sets[0].player && sets[0].opponent;
+
+  const selectedSportData = sports.find(s => s.id === selectedSport);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Green Header with Tennis Ball */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <IconButton 
-              icon="close" 
-              onPress={() => navigation.goBack()}
-              color={colors.white}
-              style={styles.closeButton}
-            />
-            <View>
-              <H2 style={styles.headerTitle}>Match</H2>
-              <P2 style={styles.headerSubtitle}>Players</P2>
-            </View>
-          </View>
-          <View style={styles.tennisBall}>
-            <Icon name="tennis-ball" size={60} color="#FFF" />
-          </View>
+      {/* Top Section with Match Title and Sport Selector */}
+      <View style={styles.topSection}>
+        <View style={styles.topSectionTitles}>
+          <H2 style={styles.matchTitle}>Match</H2>
+          <P2 style={styles.sportSubtitle}>Sport</P2>
         </View>
-        <View style={styles.courtLine} />
+        
+        <TouchableOpacity 
+          style={styles.sportSelector}
+          onPress={() => setSportModalVisible(true)}
+        >
+          <View style={styles.sportSelectorLeft}>
+            <Icon 
+              name={selectedSportData?.icon || 'tennis'} 
+              size={24} 
+              color={colors.secondary} 
+            />
+            <P1 style={styles.sportSelectorText}>{selectedSportData?.name || 'Tennis'}</P1>
+          </View>
+          <Icon name="chevron-down" size={24} color={colors.grey} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
-        {/* Player Card */}
-        <View style={styles.playerCard}>
-          <View style={styles.playerRow}>
-            <View style={styles.flagIcon}>
-              <P1>🇪🇸</P1>
-            </View>
-            <View style={styles.playerInfo}>
-              <P1 style={styles.playerName}>You</P1>
-              <View style={styles.rankingBadge}>
-                <Icon name="tennis-ball" size={12} color={colors.secondary} />
-                <P2 style={styles.rankingText}>{playerRanking}</P2>
+        {/* Players Section */}
+        <View style={styles.section}>
+          <P2 style={styles.sectionLabel}>Players</P2>
+          <View style={styles.playersContainer}>
+            {/* Player 1 - You */}
+            <View style={styles.playerItem}>
+              <View style={styles.flagIcon}>
+                <P1 style={styles.flagEmoji}>🇪🇸</P1>
               </View>
+              <P1 style={styles.playerItemName}>You</P1>
+              <P1 style={styles.playerItemRanking}>{playerRanking}</P1>
             </View>
-          </View>
-          
-          <View style={styles.addPlayerButton}>
-            <RNTextInput
-              style={styles.playerInput}
-              placeholder="Add a player"
-              placeholderTextColor={colors.grey}
-              value={opponentName}
-              onChangeText={setOpponentName}
-            />
+
+            {/* Player 2 - Opponent or Add Player */}
+            {opponentName ? (
+              <View style={styles.playerItem}>
+                <View style={styles.flagIcon}>
+                  <P1 style={styles.flagEmoji}>🇪🇸</P1>
+                </View>
+                <P1 style={styles.playerItemName}>{opponentName}</P1>
+                <P1 style={styles.playerItemRanking}>{opponentRanking || playerRanking}</P1>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setOpponentName('');
+                    setOpponentRanking('');
+                  }}
+                  style={styles.removePlayerButton}
+                >
+                  <Icon name="close" size={20} color={colors.grey} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.playerItem}>
+                <RNTextInput
+                  style={styles.addPlayerInput}
+                  placeholder="Add a player"
+                  placeholderTextColor={colors.grey}
+                  value={opponentName}
+                  onChangeText={(text) => {
+                    setOpponentName(text);
+                  }}
+                  onSubmitEditing={(e) => {
+                    if (e.nativeEvent.text.trim()) {
+                      setOpponentName(e.nativeEvent.text.trim());
+                      Keyboard.dismiss();
+                    }
+                  }}
+                  blurOnSubmit={true}
+                  returnKeyType="done"
+                />
+              </View>
+            )}
           </View>
         </View>
 
         {/* Score Section */}
-        <View style={styles.scoreSection}>
-          <H3 style={styles.sectionTitle}>Score</H3>
+        <View style={styles.section}>
+          <P2 style={styles.sectionLabel}>Score</P2>
           <View style={styles.scoreCard}>
-            <View style={styles.scoreHeader}>
+            <View style={styles.scoreRow}>
               <View style={styles.scorePlayer}>
                 <View style={styles.flagSmall}>
-                  <P2>🇪🇸</P2>
+                  <P2 style={styles.flagEmoji}>🇪🇸</P2>
                 </View>
                 <P1 style={styles.scorePlayerName}>YOU</P1>
               </View>
@@ -164,15 +245,17 @@ export const TrackMatchScreen = () => {
                     maxLength={2}
                     placeholder="0"
                     placeholderTextColor={colors.lightGrey}
+                    blurOnSubmit={true}
+                    returnKeyType="done"
                   />
                 ))}
               </View>
             </View>
             
-            <View style={styles.scoreHeader}>
+            <View style={styles.scoreRow}>
               <View style={styles.scorePlayer}>
                 <View style={styles.flagSmall}>
-                  <P2>🏳️</P2>
+                  <P2 style={styles.flagEmoji}>🏳️</P2>
                 </View>
                 <P1 style={styles.scorePlayerName}>Player 2</P1>
               </View>
@@ -187,6 +270,8 @@ export const TrackMatchScreen = () => {
                     maxLength={2}
                     placeholder="0"
                     placeholderTextColor={colors.lightGrey}
+                    blurOnSubmit={true}
+                    returnKeyType="done"
                   />
                 ))}
               </View>
@@ -194,52 +279,103 @@ export const TrackMatchScreen = () => {
           </View>
         </View>
 
-        {/* Data Section */}
-        <View style={styles.dataSection}>
-          <H3 style={styles.sectionTitle}>Data</H3>
-          <View style={styles.dataCard}>
-            <View style={styles.dataRow}>
-              <P2 style={styles.dataLabel}>Time</P2>
-              <P2 style={styles.dataValue}>Time</P2>
-            </View>
-            <View style={styles.dataRow}>
-              <P2 style={styles.dataLabel}>Court type</P2>
-              <P2 style={styles.dataValue}>{courtType}</P2>
-            </View>
-            <View style={styles.dataRow}>
-              <P2 style={styles.dataLabel}>Location</P2>
-              <RNTextInput
-                style={styles.dataInput}
-                placeholder="Location"
-                placeholderTextColor={colors.grey}
-                value={location}
-                onChangeText={setLocation}
-              />
-            </View>
-            <View style={styles.dataRow}>
-              <P2 style={styles.dataLabel}>Type</P2>
-              <P2 style={styles.dataValue}>Match</P2>
-            </View>
-            <View style={styles.dataRowFull}>
-              <P2 style={styles.dataLabel}>Title</P2>
-              <RNTextInput
-                style={styles.dataInputFull}
-                placeholder="Match title"
-                placeholderTextColor={colors.grey}
-                value={matchTitle}
-                onChangeText={setMatchTitle}
-              />
-            </View>
+        {/* Match Data Section */}
+        <View style={styles.section}>
+          <P2 style={styles.sectionLabel}>Match Data</P2>
+          <View style={styles.dataContainer}>
+            <TouchableOpacity 
+              style={styles.dataRow}
+              onPress={() => setDateModalVisible(true)}
+            >
+              <View style={styles.dataRowLeft}>
+                <Icon name="calendar" size={20} color={colors.grey} />
+                <P2 style={styles.dataLabel}>Date</P2>
+              </View>
+              <View style={styles.dataRowRight}>
+                <P2 style={styles.dataValue}>{formatDate(selectedDate)}</P2>
+                <Icon name="chevron-right" size={20} color={colors.grey} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dataRow}
+              onPress={() => setDurationModalVisible(true)}
+            >
+              <View style={styles.dataRowLeft}>
+                <Icon name="clock" size={20} color={colors.grey} />
+                <P2 style={styles.dataLabel}>Duration</P2>
+              </View>
+              <View style={styles.dataRowRight}>
+                <P2 style={styles.dataValue}>{duration || 'Select'}</P2>
+                <Icon name="chevron-right" size={20} color={colors.grey} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dataRow}
+              onPress={() => setCourtTypeModalVisible(true)}
+            >
+              <View style={styles.dataRowLeft}>
+                <View style={[styles.courtIcon, styles.courtIconClay]} />
+                <P2 style={styles.dataLabel}>Court Type</P2>
+              </View>
+              <View style={styles.dataRowRight}>
+                <P2 style={styles.dataValue}>{courtType}</P2>
+                <Icon name="chevron-right" size={20} color={colors.grey} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dataRow}
+              onPress={() => setLocationModalVisible(true)}
+            >
+              <View style={styles.dataRowLeft}>
+                <Icon name="map-marker" size={20} color={colors.grey} />
+                <P2 style={styles.dataLabel}>Location</P2>
+              </View>
+              <View style={styles.dataRowRight}>
+                <P2 style={styles.dataValue}>{location || 'Select'}</P2>
+                <Icon name="chevron-right" size={20} color={colors.grey} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dataRow}
+              onPress={() => setMatchTypeModalVisible(true)}
+            >
+              <View style={styles.dataRowLeft}>
+                <Icon name="trophy" size={20} color={colors.grey} />
+                <P2 style={styles.dataLabel}>Type</P2>
+              </View>
+              <View style={styles.dataRowRight}>
+                <P2 style={styles.dataValue}>{selectedMatchType}</P2>
+                <Icon name="chevron-right" size={20} color={colors.grey} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Title Section */}
+        <View style={styles.section}>
+          <P2 style={styles.sectionLabel}>Title</P2>
+          <View style={styles.titleCard}>
+            <RNTextInput
+              style={styles.titleInput}
+              placeholder="Active state"
+              placeholderTextColor={colors.grey}
+              value={matchTitle}
+              onChangeText={setMatchTitle}
+            />
           </View>
         </View>
 
         {/* Notes Section */}
-        <View style={styles.notesSection}>
-          <H3 style={styles.sectionTitle}>Notes</H3>
+        <View style={styles.section}>
+          <P2 style={styles.sectionLabel}>Notes</P2>
           <View style={styles.notesCard}>
             <RNTextInput
               style={styles.notesInput}
-              placeholder="Add notes about the match..."
+              placeholder="Multiline input is the place here. Multiline input is the place here. Multiline input is the place here."
               placeholderTextColor={colors.grey}
               value={notes}
               onChangeText={setNotes}
@@ -260,6 +396,224 @@ export const TrackMatchScreen = () => {
           style={styles.submitButton}
         />
       </ScrollView>
+
+      {/* Sport Selection Modal */}
+      <Modal
+        visible={sportModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSportModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <H3 style={styles.modalTitle}>Choose a sport</H3>
+            {sports.map((sport) => (
+              <TouchableOpacity
+                key={sport.id}
+                style={[
+                  styles.sportOption,
+                  selectedSport === sport.id && styles.sportOptionSelected,
+                ]}
+                onPress={() => {
+                  setSelectedSport(sport.id);
+                  setSportModalVisible(false);
+                }}
+              >
+                <Icon name={sport.icon} size={40} color={colors.secondary} />
+                <P1 style={styles.sportOptionText}>{sport.name}</P1>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={dateModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDateModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <H3 style={styles.modalTitle}>Select Date</H3>
+            <View style={styles.datePickerContainer}>
+              <P2 style={styles.modalText}>Date: {formatDate(selectedDate)}</P2>
+              <P2 style={styles.modalSubtext}>Date picker coming soon</P2>
+            </View>
+            <View style={styles.modalButtons}>
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => setDateModalVisible(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                title="Confirm"
+                onPress={() => setDateModalVisible(false)}
+                style={styles.modalButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Duration Modal */}
+      <Modal
+        visible={durationModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDurationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <H3 style={styles.modalTitle}>Duration</H3>
+            <View style={styles.durationInputs}>
+              <View style={styles.durationInputContainer}>
+                <P2 style={styles.durationLabel}>Hours</P2>
+                <RNTextInput
+                  style={styles.durationInput}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  value={durationHours}
+                  onChangeText={setDurationHours}
+                />
+              </View>
+              <View style={styles.durationInputContainer}>
+                <P2 style={styles.durationLabel}>Minutes</P2>
+                <RNTextInput
+                  style={styles.durationInput}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  value={durationMinutes}
+                  onChangeText={setDurationMinutes}
+                />
+              </View>
+            </View>
+            <View style={styles.modalButtons}>
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => setDurationModalVisible(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                title="Confirm"
+                onPress={() => {
+                  setDuration(formatDuration(durationHours, durationMinutes));
+                  setDurationModalVisible(false);
+                }}
+                style={styles.modalButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Court Type Modal */}
+      <Modal
+        visible={courtTypeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCourtTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <H3 style={styles.modalTitle}>Court Type</H3>
+            {courtTypes.map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.modalOption,
+                  courtType === type && styles.modalOptionSelected,
+                ]}
+                onPress={() => {
+                  setCourtType(type);
+                  setCourtTypeModalVisible(false);
+                }}
+              >
+                <P1 style={styles.modalOptionText}>{type}</P1>
+                {courtType === type && (
+                  <Icon name="check" size={24} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Location Modal */}
+      <Modal
+        visible={locationModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLocationModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <H3 style={styles.modalTitle}>Location</H3>
+            <RNTextInput
+              style={styles.modalTextInput}
+              placeholder="Enter location"
+              value={location}
+              onChangeText={setLocation}
+            />
+            <View style={styles.modalButtons}>
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => setLocationModalVisible(false)}
+                style={styles.modalButton}
+              />
+              <Button
+                title="Confirm"
+                onPress={() => setLocationModalVisible(false)}
+                style={styles.modalButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Match Type Modal */}
+      <Modal
+        visible={matchTypeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMatchTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <H3 style={styles.modalTitle}>Match Type</H3>
+            {matchTypes.map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.modalOption,
+                  selectedMatchType === type && styles.modalOptionSelected,
+                ]}
+                onPress={() => {
+                  setSelectedMatchType(type);
+                  setMatchTypeModalVisible(false);
+                }}
+              >
+                <P1 style={styles.modalOptionText}>{type}</P1>
+                {selectedMatchType === type && (
+                  <Icon name="check" size={24} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -269,112 +623,116 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
-  header: {
-    backgroundColor: colors.primary,
+  topSection: {
+    backgroundColor: colors.white,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.ultraLightGrey,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+  topSectionTitles: {
+    marginBottom: spacing.md,
   },
-  closeButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  headerTitle: {
-    color: colors.white,
-    fontSize: 24,
+  matchTitle: {
+    color: colors.secondary,
+    fontSize: 28,
     fontWeight: '700',
+    marginBottom: spacing.xs,
   },
-  headerSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-  },
-  tennisBall: {
-    opacity: 0.3,
-  },
-  courtLine: {
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginTop: spacing.lg,
+  sportSubtitle: {
+    color: colors.secondary,
+    fontSize: 18,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,
   },
   content: {
     padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
   },
-  playerCard: {
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.secondary,
+    marginBottom: spacing.md,
+  },
+  sportSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E7E7E7',
+    marginTop: spacing.xs,
+  },
+  sportSelectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  sportSelectorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.secondary,
+  },
+  playersContainer: {
+    gap: spacing.sm,
+  },
+  playerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E7E7E7',
+  },
+  flagIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flagEmoji: {
+    fontSize: 18,
+  },
+  playerItemName: {
+    flex: 1,
+    fontWeight: '700',
+    color: colors.secondary,
+    fontSize: 16,
+  },
+  playerItemRanking: {
+    fontWeight: '700',
+    color: colors.secondary,
+    fontSize: 16,
+  },
+  removePlayerButton: {
+    padding: spacing.xs,
+    marginLeft: spacing.xs,
+  },
+  addPlayerInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.grey,
+    padding: 0,
+  },
+  scoreCard: {
     backgroundColor: colors.white,
     borderRadius: 12,
     padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E7E7E7',
   },
-  playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  flagIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.hyperLightGrey,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  playerInfo: {
-    flex: 1,
-  },
-  playerName: {
-    fontWeight: '600',
-    color: colors.secondary,
-    marginBottom: spacing.xs,
-  },
-  rankingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  rankingText: {
-    color: colors.secondary,
-    fontWeight: '600',
-  },
-  addPlayerButton: {
-    borderTopWidth: 1,
-    borderTopColor: colors.ultraLightGrey,
-    paddingTop: spacing.md,
-  },
-  playerInput: {
-    fontSize: 16,
-    color: colors.secondary,
-    padding: 0,
-  },
-  scoreSection: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    marginBottom: spacing.md,
-    color: colors.secondary,
-  },
-  scoreCard: {
-    backgroundColor: colors.hyperLightGrey,
-    borderRadius: 12,
-    padding: spacing.lg,
-  },
-  scoreHeader: {
+  scoreRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -395,6 +753,7 @@ const styles = StyleSheet.create({
   scorePlayerName: {
     fontWeight: '600',
     color: colors.secondary,
+    fontSize: 14,
   },
   scoreSets: {
     flexDirection: 'row',
@@ -403,69 +762,77 @@ const styles = StyleSheet.create({
   scoreInput: {
     width: 50,
     height: 50,
-    backgroundColor: colors.white,
+    backgroundColor: colors.hyperLightGrey,
     borderRadius: 8,
     textAlign: 'center',
     fontSize: 20,
     fontWeight: '700',
     color: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.ultraLightGrey,
   },
-  dataSection: {
-    marginBottom: spacing.lg,
-  },
-  dataCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: spacing.lg,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  dataContainer: {
+    width: '100%',
+    maxWidth: 370,
+    alignSelf: 'center',
+    gap: 12,
   },
   dataRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.ultraLightGrey,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    height: 55,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#E7E7E7',
   },
-  dataRowFull: {
-    paddingVertical: spacing.md,
+  dataRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  dataRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   dataLabel: {
     color: colors.grey,
+    fontSize: 14,
   },
   dataValue: {
     color: colors.secondary,
     fontWeight: '500',
-  },
-  dataInput: {
-    flex: 1,
-    textAlign: 'right',
     fontSize: 14,
+  },
+  courtIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  courtIconClay: {
+    backgroundColor: '#F97316',
+  },
+  titleCard: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E7E7E7',
+  },
+  titleInput: {
+    fontSize: 16,
     color: colors.secondary,
     padding: 0,
-  },
-  dataInputFull: {
-    marginTop: spacing.sm,
-    fontSize: 14,
-    color: colors.secondary,
-    padding: 0,
-  },
-  notesSection: {
-    marginBottom: spacing.lg,
   },
   notesCard: {
     backgroundColor: colors.white,
     borderRadius: 12,
-    padding: spacing.lg,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E7E7E7',
   },
   notesInput: {
     fontSize: 14,
@@ -475,7 +842,123 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   submitButton: {
-    marginBottom: spacing.xxxl,
+    marginTop: spacing.lg,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+    maxHeight: '80%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.lightGrey,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.secondary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  sportOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    padding: spacing.md,
+    borderRadius: 12,
+    marginBottom: spacing.sm,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  sportOptionSelected: {
+    borderColor: colors.secondary,
+    backgroundColor: colors.hyperLightGrey,
+  },
+  sportOptionText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.secondary,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 12,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.hyperLightGrey,
+  },
+  modalOptionSelected: {
+    backgroundColor: colors.primary + '20',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.secondary,
+  },
+  modalTextInput: {
+    backgroundColor: colors.hyperLightGrey,
+    borderRadius: 12,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.secondary,
+    marginBottom: spacing.lg,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  datePickerContainer: {
+    marginBottom: spacing.lg,
+  },
+  modalText: {
+    fontSize: 16,
+    color: colors.secondary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  modalSubtext: {
+    fontSize: 14,
+    color: colors.grey,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  durationInputs: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  durationInputContainer: {
+    flex: 1,
+  },
+  durationLabel: {
+    fontSize: 14,
+    color: colors.grey,
+    marginBottom: spacing.sm,
+  },
+  durationInput: {
+    backgroundColor: colors.hyperLightGrey,
+    borderRadius: 12,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.secondary,
+    textAlign: 'center',
   },
 });
-
