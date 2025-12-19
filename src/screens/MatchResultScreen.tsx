@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView, Share, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView, Share, Platform, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { H1, H2, H3, P1, P2, Button, Card, IconButton } from '../components';
@@ -14,7 +14,7 @@ export const MatchResultScreen = () => {
     return null;
   }
 
-  const { result, opponentName, sets, playerSets, opponentSets, location, date, matchType } = matchData;
+  const { result, opponentName, sets, playerSets, opponentSets, location, date, matchType, playerProfileImageUrl } = matchData;
   const isWin = result === 'win';
 
   const handleShare = async () => {
@@ -54,7 +54,7 @@ export const MatchResultScreen = () => {
         <View style={styles.resultBadge}>
           <Icon 
             name={isWin ? 'trophy' : 'close-circle'} 
-            size={60} 
+            size={45} 
             color={isWin ? colors.accent : colors.danger} 
           />
           <H1 style={[styles.resultText, { color: isWin ? colors.accent : colors.danger }]}>
@@ -83,7 +83,14 @@ export const MatchResultScreen = () => {
           <View style={styles.scoreContainer}>
             <View style={styles.playerSection}>
               <View style={styles.playerInfo}>
-                <Icon name="account-circle" size={50} color={colors.primary} />
+                {playerProfileImageUrl ? (
+                  <Image 
+                    source={{ uri: playerProfileImageUrl }} 
+                    style={styles.playerAvatar}
+                  />
+                ) : (
+                  <Icon name="account-circle" size={50} color={colors.primary} />
+                )}
                 <View>
                   <P2 style={styles.playerLabel}>You</P2>
                   <H2 style={styles.playerName}>Me</H2>
@@ -258,6 +265,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  playerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.ultraLightGrey,
   },
   opponentTextContainer: {
     alignItems: 'flex-end',

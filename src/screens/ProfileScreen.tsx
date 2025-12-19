@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl, Dimensions, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator, RefreshControl, Dimensions, TouchableOpacity, Image, Linking } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../contexts/AuthContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -67,12 +67,37 @@ export const ProfileScreen = () => {
     return days;
   };
 
-  // Generate ranking graph data (mock for now)
+  // Generate ranking graph data based on current ranking
   const generateRankingData = () => {
+    // Safely parse ranking, default to 6.4 if invalid
+    let currentRanking = parseFloat(user?.tennis_level || '6.4');
+    if (isNaN(currentRanking) || currentRanking <= 0) {
+      currentRanking = 6.4;
+    }
+
+    const labels = ['', '', '', '', '', '', ''];
+
+    // Generate a progression that ends at current ranking
+    // Show last 7 data points gradually increasing to current ranking
+    const data = [];
+    const baseRanking = Math.max(4.0, currentRanking - 0.4); // Start 0.4 below current, min 4.0
+
+    for (let i = 0; i < 7; i++) {
+      // Gradually increase towards current ranking
+      const progress = i / 6;
+      const value = baseRanking + (currentRanking - baseRanking) * progress;
+      const roundedValue = Math.round(value * 10) / 10;
+      // Ensure we never push NaN
+      data.push(isNaN(roundedValue) ? currentRanking : roundedValue);
+    }
+
+    // Final validation - ensure all values are valid numbers
+    const validatedData = data.map(val => (isNaN(val) || val <= 0 ? 6.4 : val));
+
     return {
-      labels: ['', '', '', '', '', '', ''],
+      labels,
       datasets: [{
-        data: [6.0, 6.1, 6.0, 6.2, 6.3, 6.3, 6.4],
+        data: validatedData,
         strokeWidth: 2,
       }],
     };
@@ -108,21 +133,21 @@ export const ProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
-        {/* Profile Header - Image on Left, Name on Right */}
+        {/* Profile Header - Image on Left, Name and Stats on Right */}
         <View style={styles.profileContainer}>
           {/* Left: Profile Image */}
           <View style={styles.profileLeft}>
             <View style={styles.avatarCircle}>
               {user?.profile_image_url ? (
-                <Image 
-                  source={{ uri: user.profile_image_url }} 
+                <Image
+                  source={{ uri: user.profile_image_url }}
                   style={styles.profileImage}
                 />
               ) : (
@@ -131,25 +156,85 @@ export const ProfileScreen = () => {
             </View>
           </View>
 
-          {/* Right: Name */}
+          {/* Right: Name and Stats */}
           <View style={styles.profileRight}>
             <H2 style={styles.name}>{user?.full_name || user?.email?.split('@')[0] || 'Player'}</H2>
+
+            {/* Stats Row - Full Width */}
+            <View style={styles.statsRowFullWidth}>
+              <View style={styles.statItem}>
+                <P2 style={styles.statLabel}>Matches</P2>
+                <P1 style={styles.statValue}>{stats?.total_matches || 0}</P1>
+              </View>
+              <View style={styles.statItem}>
+                <P2 style={styles.statLabel}>Followers</P2>
+                <P1 style={styles.statValue}>0</P1>
+              </View>
+              <View style={styles.statItem}>
+                <P2 style={styles.statLabel}>Following</P2>
+                <P1 style={styles.statValue}>0</P1>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Stats Row - Full Width */}
-        <View style={styles.statsRowFullWidth}>
-          <View style={styles.statItem}>
-            <P1 style={styles.statValue}>{stats?.total_matches || 0}</P1>
-            <P2 style={styles.statLabel}>Matches</P2>
+        {/* Bio and Link Section */}
+        {(user?.bio || user?.link) && (
+          <View style={[styles.bioSection, user?.bio && user?.link && styles.bioSectionWithGap]}>
+            {user?.bio && (
+              <View style={styles.bioContainer}>
+                <P1 style={styles.bioText}>{user.bio.trim()}</P1>
+              </View>
+            )}
+            {user?.link && (
+              <TouchableOpacity
+                onPress={async () => {
+                  const link = user.link;
+                  if (!link) {
+                    return;
+                  }
+                  const url = link.startsWith('http') ? link : `https://${link}`;
+                  try {
+                    const canOpen = await Linking.canOpenURL(url);
+                    if (canOpen) {
+                      await Linking.openURL(url);
+                    }
+                  } catch (error) {
+                    console.error('Error opening link:', error);
+                  }
+                }}
+                style={styles.linkContainer}
+              >
+                <P2 style={styles.linkText}>{user.link}</P2>
+              </TouchableOpacity>
+            )}
           </View>
-          <View style={styles.statItem}>
-            <P1 style={styles.statValue}>0</P1>
-            <P2 style={styles.statLabel}>Followers</P2>
-          </View>
-          <View style={styles.statItem}>
-            <P1 style={styles.statValue}>0</P1>
-            <P2 style={styles.statLabel}>Following</P2>
+        )}
+
+        {/* Matches Played Chart */}
+        <View style={styles.section}>
+          <H3 style={styles.sectionTitle}>Match Activity</H3>
+          <View style={styles.matchesChartContainer}>
+            <View style={styles.matchesChart}>
+              {matchesPlayedData.map((count, index) => {
+                const maxBarHeight = 100; // Maximum height for bars
+                const barHeight = Math.min(Math.max(count * 20, 8), maxBarHeight);
+                return (
+                  <View key={index} style={styles.barContainer}>
+                    <View style={[
+                      styles.bar,
+                      {
+                        height: barHeight,
+                        backgroundColor: count > 0 ? colors.primary : colors.ultraLightGrey,
+                      },
+                    ]} />
+                  </View>
+                );
+              })}
+            </View>
+            <View style={styles.chartLegend}>
+              <P2 style={styles.legendText}>Last 14 days</P2>
+            </View>
           </View>
         </View>
 
@@ -201,8 +286,8 @@ export const ProfileScreen = () => {
           <View style={styles.calendarContainer}>
             <View style={styles.calendar}>
               {calendarData.map((day, index) => (
-                <View 
-                  key={index} 
+                <View
+                  key={index}
                   style={[
                     styles.calendarDay,
                     day.hasMatch && styles.calendarDayActive,
@@ -216,29 +301,6 @@ export const ProfileScreen = () => {
                   </P2>
                 </View>
               ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Matches Played Chart */}
-        <View style={styles.section}>
-          <H3 style={styles.sectionTitle}>Match Activity</H3>
-          <View style={styles.matchesChartContainer}>
-            <View style={styles.matchesChart}>
-              {matchesPlayedData.map((count, index) => (
-                <View key={index} style={styles.barContainer}>
-                  <View style={[
-                    styles.bar,
-                    { 
-                      height: Math.max(count * 40, 8),
-                      backgroundColor: count > 0 ? colors.primary : colors.ultraLightGrey,
-                    }
-                  ]} />
-                </View>
-              ))}
-            </View>
-            <View style={styles.chartLegend}>
-              <P2 style={styles.legendText}>Last 14 days</P2>
             </View>
           </View>
         </View>
@@ -268,8 +330,8 @@ export const ProfileScreen = () => {
                       <View style={styles.matchInfo}>
                         <P1 style={styles.matchOpponent}>{match.opponent_name}</P1>
                         <P2 style={styles.matchDate}>
-                          {new Date(match.played_at).toLocaleDateString('en-US', { 
-                            month: 'short', 
+                          {new Date(match.played_at).toLocaleDateString('en-US', {
+                            month: 'short',
                             day: 'numeric',
                           })}
                         </P2>
@@ -278,11 +340,11 @@ export const ProfileScreen = () => {
                     <View style={styles.matchRight}>
                       <View style={[
                         styles.resultBadge,
-                        match.result === 'win' ? styles.resultBadgeWin : styles.resultBadgeLoss
+                        match.result === 'win' ? styles.resultBadgeWin : styles.resultBadgeLoss,
                       ]}>
                         <P2 style={[
                           styles.resultText,
-                          match.result === 'win' ? styles.resultTextWin : styles.resultTextLoss
+                          match.result === 'win' ? styles.resultTextWin : styles.resultTextLoss,
                         ]}>
                           {match.result === 'win' ? 'W' : 'L'}
                         </P2>
@@ -344,34 +406,60 @@ const styles = StyleSheet.create({
   },
   profileRight: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: spacing.xs,
   },
   name: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.secondary,
+    marginBottom: spacing.xs,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
   },
   statsRowFullWidth: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: layout.screenPadding,
-    marginBottom: spacing.xl,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     width: '100%',
+    marginTop: spacing.xs,
+    paddingRight: spacing.xl,
   },
   statItem: {
-    alignItems: 'center',
-    flex: 1,
+    alignItems: 'flex-start',
   },
   statValue: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.secondary,
-    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
   },
   statLabel: {
     fontSize: 12,
     color: colors.grey,
+  },
+  bioSection: {
+    paddingHorizontal: layout.screenPadding,
+    marginBottom: spacing.xl,
+  },
+  bioSectionWithGap: {
+    gap: 8,
+  },
+  bioContainer: {
+  },
+  bioText: {
+    fontSize: 14,
+    color: colors.secondary,
+    lineHeight: 20,
+  },
+  linkContainer: {
+  },
+  linkText: {
+    fontSize: 14,
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
   section: {
     marginBottom: spacing.xl,
@@ -442,11 +530,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     padding: spacing.md,
+    overflow: 'hidden',
   },
   matchesChart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    height: 120,
+    height: 100,
+    maxHeight: 100,
     gap: spacing.xs,
     marginBottom: spacing.sm,
   },
