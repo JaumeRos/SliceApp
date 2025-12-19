@@ -171,19 +171,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await Promise.all([
         AsyncStorage.setItem('@auth_access_token', response.accessToken),
         AsyncStorage.setItem('@auth_refresh_token', response.refreshToken),
-        AsyncStorage.setItem('@user', JSON.stringify(response.user)),
       ]);
 
-      setAuthState({
-        isAuthenticated: true,
-        hasUser: true,
-        hasToken: true,
-        userId: response.user.id,
-        handlingLoginError: false,
-        user: response.user,
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-      });
+      // Set loading to true while we refresh user data
+      setLoading(true);
+
+      // Refresh user data FIRST to get complete profile including onboarding_completed
+      try {
+        const userResponse = await api.auth.me();
+        if (userResponse.success && userResponse.user) {
+          await AsyncStorage.setItem('@user', JSON.stringify(userResponse.user));
+          // Set state with complete user data
+          setAuthState({
+            isAuthenticated: true,
+            hasUser: true,
+            hasToken: true,
+            userId: userResponse.user.id,
+            handlingLoginError: false,
+            user: userResponse.user,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+          });
+          console.log('[AUTH CONTEXT] User data refreshed after sign-in, onboarding_completed:', userResponse.user.onboarding_completed);
+        } else {
+          // Fallback to login response if refresh fails
+          setAuthState({
+            isAuthenticated: true,
+            hasUser: true,
+            hasToken: true,
+            userId: response.user.id,
+            handlingLoginError: false,
+            user: response.user,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+          });
+        }
+      } catch (refreshError) {
+        console.error('[AUTH CONTEXT] Error refreshing user after sign-in:', refreshError);
+        // Fallback to login response if refresh fails
+        setAuthState({
+          isAuthenticated: true,
+          hasUser: true,
+          hasToken: true,
+          userId: response.user.id,
+          handlingLoginError: false,
+          user: response.user,
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+        });
+      } finally {
+        setLoading(false);
+      }
     } catch (error: any) {
       console.error('[AUTH CONTEXT] Login error:', error);
       setAuthState(prev => ({ ...prev, handlingLoginError: false }));
@@ -262,18 +300,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       await AsyncStorage.setItem('@auth_access_token', data.accessToken);
       await AsyncStorage.setItem('@auth_refresh_token', data.refreshToken);
-      await AsyncStorage.setItem('@user', JSON.stringify(data.user));
 
-      setAuthState({
-        isAuthenticated: true,
-        hasUser: true,
-        hasToken: true,
-        userId: data.user.id,
-        handlingLoginError: false,
-        user: data.user,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      // Set loading to true while we refresh user data
+      setLoading(true);
+
+      // Refresh user data FIRST to get complete profile including onboarding_completed
+      try {
+        const userResponse = await api.auth.me();
+        if (userResponse.success && userResponse.user) {
+          await AsyncStorage.setItem('@user', JSON.stringify(userResponse.user));
+          // Set state with complete user data
+          setAuthState({
+            isAuthenticated: true,
+            hasUser: true,
+            hasToken: true,
+            userId: userResponse.user.id,
+            handlingLoginError: false,
+            user: userResponse.user,
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+          });
+          console.log('[AUTH CONTEXT] User data refreshed after Apple sign-in, onboarding_completed:', userResponse.user.onboarding_completed);
+        } else {
+          // Fallback to Apple sign-in response if refresh fails
+          await AsyncStorage.setItem('@user', JSON.stringify(data.user));
+          setAuthState({
+            isAuthenticated: true,
+            hasUser: true,
+            hasToken: true,
+            userId: data.user.id,
+            handlingLoginError: false,
+            user: data.user,
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+          });
+        }
+      } catch (refreshError) {
+        console.error('[AUTH CONTEXT] Error refreshing user after Apple sign-in:', refreshError);
+        // Fallback to Apple sign-in response if refresh fails
+        await AsyncStorage.setItem('@user', JSON.stringify(data.user));
+        setAuthState({
+          isAuthenticated: true,
+          hasUser: true,
+          hasToken: true,
+          userId: data.user.id,
+          handlingLoginError: false,
+          user: data.user,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        });
+      } finally {
+        setLoading(false);
+      }
 
       return data;
     } catch (error: any) {
@@ -298,19 +376,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await Promise.all([
         AsyncStorage.setItem('@auth_access_token', response.accessToken),
         AsyncStorage.setItem('@auth_refresh_token', response.refreshToken),
-        AsyncStorage.setItem('@user', JSON.stringify(response.user)),
       ]);
 
-      setAuthState({
-        isAuthenticated: true,
-        hasUser: true,
-        hasToken: true,
-        userId: response.user.id,
-        handlingLoginError: false,
-        user: response.user,
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-      });
+      // Set loading to true while we refresh user data
+      setLoading(true);
+
+      // Refresh user data FIRST to get complete profile including onboarding_completed
+      try {
+        const userResponse = await api.auth.me();
+        if (userResponse.success && userResponse.user) {
+          await AsyncStorage.setItem('@user', JSON.stringify(userResponse.user));
+          // Set state with complete user data
+          setAuthState({
+            isAuthenticated: true,
+            hasUser: true,
+            hasToken: true,
+            userId: userResponse.user.id,
+            handlingLoginError: false,
+            user: userResponse.user,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+          });
+          console.log('[AUTH CONTEXT] User data refreshed after Google sign-in, onboarding_completed:', userResponse.user.onboarding_completed);
+        } else {
+          // Fallback to Google sign-in response if refresh fails
+          await AsyncStorage.setItem('@user', JSON.stringify(response.user));
+          setAuthState({
+            isAuthenticated: true,
+            hasUser: true,
+            hasToken: true,
+            userId: response.user.id,
+            handlingLoginError: false,
+            user: response.user,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+          });
+        }
+      } catch (refreshError) {
+        console.error('[AUTH CONTEXT] Error refreshing user after Google sign-in:', refreshError);
+        // Fallback to Google sign-in response if refresh fails
+        await AsyncStorage.setItem('@user', JSON.stringify(response.user));
+        setAuthState({
+          isAuthenticated: true,
+          hasUser: true,
+          hasToken: true,
+          userId: response.user.id,
+          handlingLoginError: false,
+          user: response.user,
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+        });
+      } finally {
+        setLoading(false);
+      }
 
       return response;
     } catch (error: any) {
